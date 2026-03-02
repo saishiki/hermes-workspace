@@ -30,12 +30,74 @@ import { cn } from '@/lib/utils'
  *  indicator disappears — prevents a flash of blank space (Bug 2 fix). */
 const THINKING_GRACE_PERIOD_MS = 400
 
+/** Map tool names to human-readable status strings */
+const TOOL_STATUS_MAP: Record<string, string> = {
+  memory_search: 'Searching memory…',
+  memory_get: 'Searching memory…',
+  web_search: 'Searching the web…',
+  web_fetch: 'Reading page…',
+  Read: 'Reading file…',
+  read: 'Reading file…',
+  Write: 'Writing file…',
+  write: 'Writing file…',
+  Edit: 'Writing file…',
+  edit: 'Writing file…',
+  exec: 'Running code…',
+  sessions_spawn: 'Spawning agent…',
+  sessions_history: 'Checking sessions…',
+  sessions_list: 'Checking sessions…',
+  browser: 'Browsing web…',
+  image: 'Analyzing image…',
+  tts: 'Generating audio…',
+}
+
+function getToolStatusLabel(toolName: string): string {
+  return TOOL_STATUS_MAP[toolName] ?? 'Working…'
+}
+
+type ThinkingBubbleProps = {
+  activeToolCalls?: Array<{ id: string; name: string; phase: string }>
+  liveToolActivity?: Array<{ name: string; timestamp: number }>
+}
+
 /**
  * Premium shimmer thinking bubble — matches the assistant message position
- * with three bouncing dots, a gradient shimmer sweep, and a delayed
- * "Thinking..." label that only appears after 2 s.
+ * with three bouncing dots, a gradient shimmer sweep, and a dynamic status
+ * label that reflects what's actually happening (tool calls, etc.).
  */
-function ThinkingBubble() {
+function ThinkingBubble({ activeToolCalls = [], liveToolActivity = [] }: ThinkingBubbleProps) {
+  // Derive the most recent active tool name
+  const activeToolName = useMemo(() => {
+    // liveToolActivity is ordered newest-first
+    if (liveToolActivity.length > 0) return liveToolActivity[0].name
+    // activeToolCalls: prefer 'calling'/'start' phase, fall back to most recent
+    const calling = activeToolCalls.find(
+      (tc) => tc.phase === 'calling' || tc.phase === 'start',
+    )
+    if (calling) return calling.name
+    if (activeToolCalls.length > 0) return activeToolCalls[activeToolCalls.length - 1].name
+    return null
+  }, [activeToolCalls, liveToolActivity])
+
+  const statusLabel = activeToolName ? getToolStatusLabel(activeToolName) : 'Thinking…'
+
+  // Track displayed label with a small delay so we fade between changes
+  const [displayedLabel, setDisplayedLabel] = useState(statusLabel)
+  const [visible, setVisible] = useState(true)
+  const prevLabelRef = useRef(statusLabel)
+
+  useEffect(() => {
+    if (statusLabel === prevLabelRef.current) return
+    // Fade out, swap, fade in
+    setVisible(false)
+    const swapTimer = window.setTimeout(() => {
+      setDisplayedLabel(statusLabel)
+      prevLabelRef.current = statusLabel
+      setVisible(true)
+    }, 150)
+    return () => window.clearTimeout(swapTimer)
+  }, [statusLabel])
+
   return (
     <div className="flex items-end gap-2">
       {/* Avatar with pulsing glow ring */}
@@ -48,15 +110,36 @@ function ThinkingBubble() {
         {/* Shimmer overlay */}
         <div className="thinking-shimmer-sweep pointer-events-none absolute inset-0" aria-hidden="true" />
 
-        {/* Three bouncing dots */}
-        <div className="flex items-center gap-1.5">
-          <span className="thinking-dot thinking-dot-1" />
-          <span className="thinking-dot thinking-dot-2" />
-          <span className="thinking-dot thinking-dot-3" />
-          {/* Delayed "Thinking..." label */}
-          <span className="thinking-label ml-1.5 text-xs font-medium text-primary-500 dark:text-primary-500">
-            Thinking…
-          </span>
+        {/* Three bouncing dots + dynamic status label */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="thinking-dot thinking-dot-1" />
+            <span className="thinking-dot thinking-dot-2" />
+            <span className="thinking-dot thinking-dot-3" />
+            {/* Dynamic status label with fade transition */}
+            <span
+              className="thinking-label ml-1.5 text-xs font-medium text-primary-500 dark:text-primary-500"
+              style={{
+                opacity: visible ? 1 : 0,
+                transition: 'opacity 300ms ease',
+              }}
+            >
+              {displayedLabel}
+            </span>
+          </div>
+          {/* Raw tool name pill — shown when a tool is active */}
+          {activeToolName ? (
+            <div
+              style={{
+                opacity: visible ? 1 : 0,
+                transition: 'opacity 300ms ease',
+              }}
+            >
+              <span className="inline-flex items-center rounded-full bg-primary-200/60 dark:bg-primary-800/30 px-2 py-0.5 text-[10px] font-mono text-primary-400 dark:text-primary-500 select-none">
+                {activeToolName}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -1195,7 +1278,10 @@ function ChatMessageListComponent({
                   </div>
                 ))
               ) : (
-                <ThinkingBubble />
+                <ThinkingBubble
+                  activeToolCalls={activeToolCalls}
+                  liveToolActivity={liveToolActivity}
+                />
               )}
             </div>
           ) : null}
