@@ -29,9 +29,7 @@ function normalizeRelativeMemoryPath(input: string): string {
   if (!normalized) throw new Error('Path is required')
   if (normalized.startsWith('/')) throw new Error('Absolute paths are not allowed')
   if (normalized.includes('..')) throw new Error('Path traversal is not allowed')
-  if (!(normalized === 'MEMORY.md' || normalized.startsWith('memory/'))) {
-    throw new Error('Only MEMORY.md and memory/* paths are allowed')
-  }
+  if (!normalized.toLowerCase().endsWith('.md')) throw new Error('Only Markdown files are allowed')
   return normalized
 }
 
@@ -56,7 +54,6 @@ function pushIfMarkdownFile(entries: Array<MemoryFileMeta>, workspaceRoot: strin
   if (!stats.isFile()) return
 
   const relativePath = path.relative(workspaceRoot, fullPath).replace(/\\/g, '/')
-  if (!(relativePath === 'MEMORY.md' || relativePath.startsWith('memory/'))) return
 
   entries.push({
     path: relativePath,
@@ -66,7 +63,11 @@ function pushIfMarkdownFile(entries: Array<MemoryFileMeta>, workspaceRoot: strin
   })
 }
 
-function walkMemoryDir(entries: Array<MemoryFileMeta>, workspaceRoot: string, dirPath: string) {
+function shouldSkipDirectory(name: string): boolean {
+  return name === '.git' || name === 'node_modules'
+}
+
+function walkWorkspaceDir(entries: Array<MemoryFileMeta>, workspaceRoot: string, dirPath: string) {
   let dirEntries: Array<string>
   try {
     dirEntries = fs.readdirSync(dirPath)
@@ -83,7 +84,8 @@ function walkMemoryDir(entries: Array<MemoryFileMeta>, workspaceRoot: string, di
       continue
     }
     if (stats.isDirectory()) {
-      walkMemoryDir(entries, workspaceRoot, fullPath)
+      if (shouldSkipDirectory(name)) continue
+      walkWorkspaceDir(entries, workspaceRoot, fullPath)
       continue
     }
     pushIfMarkdownFile(entries, workspaceRoot, fullPath)
@@ -107,8 +109,7 @@ export function listMemoryFiles(): Array<MemoryFileMeta> {
   const workspaceRoot = getMemoryWorkspaceRoot()
   const results: Array<MemoryFileMeta> = []
 
-  pushIfMarkdownFile(results, workspaceRoot, path.join(workspaceRoot, 'MEMORY.md'))
-  walkMemoryDir(results, workspaceRoot, path.join(workspaceRoot, 'memory'))
+  walkWorkspaceDir(results, workspaceRoot, workspaceRoot)
 
   results.sort(compareMemoryFiles)
   return results
@@ -124,7 +125,7 @@ export function searchMemoryFiles(query: string): Array<MemorySearchMatch> {
   if (!needle) return []
 
   const matches: Array<MemorySearchMatch> = []
-  const files = listMemoryFiles().filter((file) => file.path.startsWith('memory/'))
+  const files = listMemoryFiles()
 
   for (const file of files) {
     let content = ''

@@ -163,9 +163,9 @@ export const Route = createFileRoute('/api/stream')({
                 }
               })
 
-              ws.on('message', (data) => {
+              ws.on('message', (data: unknown) => {
                 try {
-                  const parsed = JSON.parse(data.toString()) as GatewayFrame
+                  const parsed = JSON.parse(String(data)) as GatewayFrame
 
                   if (parsed.type === 'res') {
                     if (!connected) {
@@ -297,8 +297,9 @@ export const Route = createFileRoute('/api/stream')({
                 }
               })
 
-              ws.on('error', (err) => {
-                sendSSE('error', { message: String(err.message || err) })
+              ws.on('error', (err: unknown) => {
+                const message = err instanceof Error ? err.message : String(err)
+                sendSSE('error', { message })
                 cleanup()
                 controller.close()
               })

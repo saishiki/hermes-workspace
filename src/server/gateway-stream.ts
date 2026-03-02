@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import EventEmitter from 'node:events'
 import WebSocket from 'ws'
+import type { RawData } from 'ws'
 
 import { buildConnectParams, getGatewayConfig } from './gateway'
 import type { GatewayFrame } from './gateway'
@@ -33,7 +34,7 @@ class GatewayStreamConnection extends EventEmitter {
 
     await this.waitForOpen(ws)
 
-    ws.on('message', (data) => {
+    ws.on('message', (data: RawData) => {
       this.handleMessage(data)
     })
     ws.on('close', () => {
@@ -41,7 +42,7 @@ class GatewayStreamConnection extends EventEmitter {
       this.failPending(new Error('Gateway connection closed'))
       this.emit('close')
     })
-    ws.on('error', (err) => {
+    ws.on('error', (err: unknown) => {
       this.failPending(err instanceof Error ? err : new Error(String(err)))
       this.emit('error', err)
     })
@@ -108,7 +109,7 @@ class GatewayStreamConnection extends EventEmitter {
       throw new Error('Gateway connection not open')
     }
     await new Promise<void>((resolve, reject) => {
-      this.ws?.send(JSON.stringify(frame), (err) => {
+      this.ws?.send(JSON.stringify(frame), (err: Error | undefined) => {
         if (err) reject(err)
         else resolve()
       })
@@ -141,7 +142,7 @@ class GatewayStreamConnection extends EventEmitter {
     })
   }
 
-  private handleMessage(raw: WebSocket.RawData) {
+  private handleMessage(raw: RawData) {
     try {
       const text = typeof raw === 'string' ? raw : raw.toString('utf8')
       const frame = JSON.parse(text) as GatewayFrame & {
