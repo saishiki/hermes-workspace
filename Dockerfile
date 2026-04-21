@@ -1,16 +1,4 @@
 # syntax=docker/dockerfile:1.6
-# Hermes Workspace — production Docker image
-#
-# Build locally:
-#   docker build -t hermes-workspace .
-#
-# Run locally:
-#   docker run -p 3000:3000 \
-#     -e HERMES_API_URL=http://host.docker.internal:8642 \
-#     -e HERMES_API_TOKEN=your_api_server_key \
-#     hermes-workspace
-
-# ─── build stage ─────────────────────────────────────────────────────────
 FROM node:22-slim AS build
 
 RUN corepack enable \
@@ -20,15 +8,12 @@ RUN corepack enable \
 
 WORKDIR /app
 
-# Install deps first for better layer caching
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 RUN pnpm install --frozen-lockfile
 
-# Copy full source and build
 COPY . .
 RUN pnpm build
 
-# ─── runtime stage ────────────────────────────────────────────────────────
 FROM node:22-slim
 
 RUN apt-get update \
@@ -39,12 +24,10 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Copy runtime artifacts
-COPY --from=build --chown=workspace:workspace /app/dist ./dist
+COPY --from=build --chown=workspace:workspace /app/.output ./.output
 COPY --from=build --chown=workspace:workspace /app/node_modules ./node_modules
 COPY --from=build --chown=workspace:workspace /app/package.json ./package.json
-
-# Copy skills only if the directory exists in the repo
+COPY --from=build --chown=workspace:workspace /app/public ./public
 COPY --from=build --chown=workspace:workspace /app/skills ./skills
 
 USER workspace
@@ -57,4 +40,4 @@ ENV NODE_ENV=production \
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "--max-old-space-size=2048", "dist/server/server.js"]
+CMD ["node", "--max-old-space-size=2048", ".output/server/index.mjs"]
