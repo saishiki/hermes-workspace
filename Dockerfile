@@ -24,7 +24,7 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY --from=build --chown=workspace:workspace /app/.output ./.output
+COPY --from=build --chown=workspace:workspace /app/dist ./dist
 COPY --from=build --chown=workspace:workspace /app/node_modules ./node_modules
 COPY --from=build --chown=workspace:workspace /app/package.json ./package.json
 COPY --from=build --chown=workspace:workspace /app/public ./public
@@ -40,4 +40,4 @@ ENV NODE_ENV=production \
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "--max-old-space-size=2048", ".output/server/index.mjs"]
+CMD ["node", "--max-old-space-size=2048", "dist/server/server.js"]
