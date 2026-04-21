@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.6
-
 FROM node:22-slim AS build
 
 RUN corepack enable \
